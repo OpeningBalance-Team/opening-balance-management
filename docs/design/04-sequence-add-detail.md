@@ -15,19 +15,17 @@ sequenceDiagram
 
     User->>Page: «ينقر إضافة صنف» (خطوة 1 من UC-003)
     Page->>Repo: LoadItems() + LoadWarehouses()
-    Note over Repo: "الأسماء فقط — BR-06 — قوائم الأصناف والمخازن"
+    Note over Repo: الأسماء فقط — BR-06 — قوائم الأصناف والمخازن
     Repo-->>Page: قوائم الأصناف والمخازن
     Page-->>User: عرض ItemDropdown + WarehouseDropdown
     User->>Page: "اختيار الصنف (UC-004) + اختيار المخزن (UC-005)"
     Page->>Repo: "Resolve ItemId / WarehouseId بالأسماء"
     User->>Page: "إدخال الكمية والسعر وتاريخ الصلاحية (اختياريان)"
     Page->>Valid: ValidateDetail(detail)
-    Note right of Valid: BR-01: صنف + مخزن + كمية مطلوبة + BR-02  
-الكمية عدد صحيح > 0 + BR-03/D10  
-التوليقة غير مكررة + D7  
-"السعر <= 0، الصلاحية مستقبلية"
 
-    alt "الصنف غير صالح (UC-003 A1/A3)"
+    Note right of Valid: BR-01: صنف + مخزن + كمية مطلوبة + BR-02<br/>الكمية عدد صحيح > 0 + BR-03/D10<br/>التوليقة غير مكررة + D7<br/>السعر <= 0، الصلاحية مستقبلية
+
+    alt الصنف غير صالح (UC-003 A1/A3)
         Valid-->>Page: ValidationResult خطأ
         Page-->>User: «...رسالة موحدة «الكمية غير صالحة / يجب اختيار صنف»»
     else الصنف صالح
