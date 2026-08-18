@@ -1,0 +1,71 @@
+# 12 — ملاحظات تنفيذية لـ ASP.NET Core + Blazor
+
+| البند | القيمة |
+|---|---|
+| المرجع الأول | وثيقة 10 — Visual Design System (التصميم البصري) |
+| المرجع الثاني | وثيقة 11 — Component-to-UI Mapping |
+| المرجع الثالث | التقنيات المعتمدة: ASP.NET Core + Blazor + C# (مستهدف MVP، Mock/In-Memory) |
+| الإعداد | Manus AI |
+
+---
+
+## 1. النطاق والافتراضات
+
+الملاحظات التالية تفترض **Blazor Server أو Blazor WebAssembly في وضع MVP** مع ملفات CSS/SCSS عادية وبدون مكتبات UI خارجية (لا Radzen ولا MudBlazor) حتى تبقى الطبقة البصرية مطابقة حرفيًا لـ VDS أعلاه. كل شيء في هذه الوثيقة قابل للتنفيذ في Blazor MVP؛ القسم 3 يوضح العناصر التي تحتاج جهدًا إضافيًا مع بدائلها البسيطة.
+
+## 2. بنية التنفيذ المقترحة
+
+**الصفحة:** `OpeningBalancePage.razor` تستضيف المناطق الخمس بترتيب وثيقة 11 (MessageBox ← HeaderForm ← AddDetailRow ← DetailsGrid ← SaveAction)، وتحتفظ بـ `OpeningBalanceSession` في حقول الصفحة (List<BalanceDetail> + DocumentHeader مؤقت + رسالة عالمية). الشريط السفلي الثابت يُنفَّذ بـ CSS `position: sticky; bottom: 0` داخل الصفحة أو بـ layout ثابت — الأفضل sticky لأن الصفحة واحدة.
+
+**الحقول:** كل حقل `<input type="text" />` عادي مربوط بـ `@bind` مع `@bind:event="oninput"` أو `onblur` للتحقق inline؛ حقول التاريخ يمكن تنفيذها بـ `<input type="date">` أو حقل نصي مع تحقق تنسيق (BR لا يشترط أداة التقويم). المنسدلات `ProductDropdown`/`WarehouseDropdown` تُبنى بـ `<div>` مخصص مع قائمة منسدلة (كما في VDS) أو بـ `<select>` عادي منسّق بنفس النمط — انظر القسم 3.
+
+**الجدول:** `<table>` عادي بـ `@foreach` على السطور؛ صف EditDetailRow يُعرض داخل نفس الجدول بحالة `bool IsEditing` لكل سطر؛ Hover بالأصابع `:hover` في CSS بلا كود.
+
+**الرسائل:** MessageBox Component بسيط يأخذ `Message` + `Kind` (success/error/none)؛ لا حاجة لمكتبة Toast.
+
+**الحفظ:** `SaveAction` يستدعي `await OpeningBalanceService.SaveDocument(...)`؛ أثناء `await` تُضبط حالة `IsSaving = true` التي تعطّل الزر وتغيّر النص إلى «جاري الحفظ...» وتُعطّل زر الإضافة — وهذا هو التمثيل العملي للحالة L.
+
+## 3. عناصر بصرية تحتاج جهدًا إضافيًا وبدائلها البسيطة
+
+| # | العنصر في VDS | لماذا أصعب في Blazor | البديل البسيط |
+|---|---|---|---|
+| 1 | **المنسدلة المخصصة** (قائمة منسدلة بخيار محدّد وخلفية زرقاء ناعمة) | Blazor لا يوفر Select مخصصًا؛ يجب بناء قائمة `div` مع keyboard navigation وإغلاق خارج النقر (click-outside يحتاج JavaScript interop أو `@onfocusout` بحذر) | **مقبول التنفيذ كاملًا** بقائمة div مع `@onkeydown` (سهم/Enter/Escape) — أو استخدام `<select>` عادي منسّق بنفس النمط إذا أريد الاختصار في MVP |
+| 2 | **الـ Spinner داخل زر الحفظ** | CSS animation بسيطة، لكنها تحتاج أن يبقى الزر ظاهرًا بحالة disabled مع نص متغير | تُنفَّذ كما في L: نص «جاري الحفظ...» + class `disabled`؛ إذا أريد دوران فعلي يكفي `@keyframes spin` في نفس ملف CSS (بلا JS) |
+| 3 | **Focus ring الخارجي 3px** | CSS عادي تمامًا — لا صعوبة؛ التذكير هنا لأن Blazor يعيد رسم العناصر مع `@key` | إضافة `@key` لكل حقل/زر لضمان استمرار Focus ring عند إعادة رسم Blazor (منع فقدان التركيز) |
+| 4 | **شريط الحفظ الثابت sticky** | `position: sticky` يعمل في Blazor لكن قد يتداخل مع تخطيط الصفحة في صفحات أطول | الشاشة صفحة واحدة قصيرة عمديًا (FR-09 لا حفظ خارج الجلسة) — sticky آمن؛ بديل أمان: `position: fixed; bottom: 0` |
+| 5 | **التمرير الأفقي للجدول على Narrow** | `overflow-x: auto` عادي، لكن تخطيط الجدول داخل بطاقة يتطلب حاوية `.grid-wrap` منفصلة عن padding البطاقة | منفّذ فعلًا في VDS (`grid-wrap`) — لا بديل مطلوب |
+| 6 | **Backlog/blur من الـ Overlay** | `backdrop-filter: blur()` غير مدعوم في بعض المتصفحات القديمة | بديل بسيط: خلفية overlay سوداء 45% بدون blur (منفذ بهامش في VDS أصلًا) |
+| 7 | **أيقونات Unicode (✓ ✕ !)** | ليست مشكلة أصلًا — لا مكتبات SVG | تُعتمد كما هي في VDS: رموز نصية، بلا تبعيات |
+
+خلاصة القسم 3: **لا يوجد عنصر في VDS غير قابل للتنفيذ في Blazor MVP**. أقصى تعقيد هو المنسدلة المخصصة (بند 1) وهي اختيارية الاستبدال بـ `<select>` عادي.
+
+## 4. ملاحظات Blazor تنفيذية خاصة بهذا التصميم
+
+**إعادة الرسم والتركيز:** عند إدخال سطر جديد في الجدول يعيد Blazor رسم `<table>`؛ يُفقد التركيز. الحل: احتفظ بمعرّف السطر المحرَّر وضع `@key` على الصف في `@foreach`، واستخدم `ElementReference.FocusAsync()` بعد الإضافة لإعادة تركيز أول حقل في سطر الإدخال (تحسين سرعة عمل موظف المخزون — UC-003 تكرار عالٍ).
+
+**منع الإضافة المزدوجة:** زر «إضافة» يجب أن يتحقق sync ويُضيف لـ List<BalanceDetail> في الذاكرة فقط (FR-09)؛ لا await هنا — كل تحققات BR-01..05 متزامنة.
+
+**الحالة L (جاري الحفظ):** تُدار بحقل `bool IsSaving` في الصفحة؛ `IsSaving == true` يعطّل SaveAction **و** AddDetailRow (منع تغيير أثناء الحفظ — سلوك موثق في L)؛ A4 (فشل حفظ) يعيد `IsSaving = false` مع رسالة الخطأ I ويبقي الزر مفعّلًا لإعادة المحاولة.
+
+**رسائل Global:** تُخزَّن كـ `string? GlobalMessage` + `MessageKind` في الصفحة؛ MessageBox يعرضها عند وجودها فقط؛ اختفاء تلقائي بعد النجاح مقبول (J) لكن الخطأ يبقى حتى تفاعله (E/I/H) — قرارات UX موجودة في وثيقة 08.
+
+**RTL:** `dir="rtl"` على `<html>` في `index.html`/`App.razor` + خط Noto Kufi Arabic/Noto Sans Arabic من Google Fonts في `index.html` — سطر واحد، لا كود C#.
+
+**الأرقام في الجدول:** خلية الكمية/السعر: `dir="ltr"` مع `style="text-align:left"` وأرقام `tabular-nums` — تنسيق قياسي في أنظمة الأعمال العربية.
+
+**No-Database reminder:** لا توجد أي إشارة بصرية أو كودية لحفظ دائم؛ التذييل «Mock / In-Memory (FR-09)» تذكير صريح داخل UI — عند التنفيذ يُترك كما هو في MVP.
+
+## 5. Traceability
+
+| ملاحظة التنفيذ | تخدم |
+|---|---|
+| التحقق sync قبل الإضافة | BR-01..05، UC-003 |
+| IsSaving يعطّل الإضافة | سلوك L (طلب المستخدم) + سلامة حالة Saving |
+| FocusAsync بعد الإضافة | NFR-03 (واجهة سريعة الاستخدام) |
+| @key على الصفوف | صحة UI states في Blazor re-render |
+| dir="rtl" + خطوط عربية | NFR-02، طلب المستخدم RTL |
+| لا persistence | FR-09 |
+
+---
+
+*المرفقات: وثيقة 10 (VDS)، وثيقة 11 (Component Mapping)، صور v2 في `assets/`.*
