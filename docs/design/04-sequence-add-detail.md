@@ -1,4 +1,4 @@
-# 06 — Sequence Diagram: Add Opening Balance Detail
+# 04 — Sequence Diagram: Add Opening Balance Detail
 
 ## مخطط التسلسل — إضافة صنف إلى بيانات الرصيد الافتتاحي
 
