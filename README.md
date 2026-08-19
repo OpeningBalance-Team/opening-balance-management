@@ -19,6 +19,48 @@ The assessment uses **Mock Data / in-memory storage** and does not require a rea
 
 ---
 
+## Screenshots
+
+### Opening Balance Screen — Adding an Item
+
+The main screen showing the document header, item addition form, and details table with one item added.
+
+![Opening Balance — Add Item](docs/screenshots/01-opening-balance-add-item.png)
+
+---
+
+### Inline Edit Mode
+
+When the user clicks "تعديل" (Edit), the row switches to inline editing mode with editable fields and save/cancel actions.
+
+![Opening Balance — Edit Item](docs/screenshots/02-opening-balance-edit-item.png)
+
+---
+
+### Delete Confirmation Dialog
+
+A confirmation modal appears before deleting an item, showing item details (product name, warehouse, quantity) for user verification.
+
+![Opening Balance — Delete Confirmation](docs/screenshots/03-opening-balance-delete-confirmation.png)
+
+---
+
+### Details View with Multiple Items
+
+The details table displaying three opening balance items with product, warehouse, quantity, price, and expiry date. Each row has edit and delete actions.
+
+![Opening Balance — Details View](docs/screenshots/04-opening-balance-details-view.png)
+
+---
+
+### Empty State — New Document
+
+When creating a new document with no details added yet, an empty state message prompts the user to add at least one item before saving.
+
+![Opening Balance — Empty State](docs/screenshots/05-opening-balance-empty-state.png)
+
+---
+
 ## Business Context
 
 The feature is intended to help inventory users register and review the quantities available in warehouses when the inventory system is initially introduced or initialized.
@@ -162,6 +204,67 @@ flowchart TB
 
 ---
 
+## Architecture
+
+The project follows a **Clean / Layered Architecture** adapted for a Blazor MVP:
+
+```mermaid
+flowchart TB
+    subgraph Presentation["Presentation Layer — Blazor"]
+        direction TB
+        Page["OpeningBalancePage.razor"]
+        HeaderForm["HeaderForm.razor"]
+        DetailsGrid["DetailsGrid.razor"]
+        AddRow["AddDetailRow"]
+        EditRow["EditDetailRow"]
+        Dialog["ConfirmDialog"]
+    end
+
+    subgraph Application["Application Layer"]
+        direction TB
+        Service["OpeningBalanceService"]
+        Validator["OpeningBalanceDetailValidator"]
+        DTOs["DTOs & Mapping"]
+    end
+
+    subgraph Domain["Domain Layer"]
+        direction TB
+        Entities["Entities"]
+        Enums["Enums"]
+    end
+
+    subgraph Data["Data / State"]
+        direction TB
+        Session["Session Storage"]
+        Mock["Mock Data"]
+    end
+
+    Page --> HeaderForm
+    Page --> DetailsGrid
+    DetailsGrid --> AddRow
+    DetailsGrid --> EditRow
+    DetailsGrid --> Dialog
+
+    HeaderForm --> Service
+    DetailsGrid --> Service
+    Service --> Validator
+    Service --> DTOs
+    DTOs --> Entities
+    Service --> Session
+    Service --> Mock
+```
+
+### Layer Responsibilities
+
+| Layer | Responsibility |
+|---|---|
+| **Presentation (Blazor UI)** | User interface, RTL layout, user interaction, validation messages |
+| **Application Services** | Use case orchestration, validation coordination, DTO mapping |
+| **Domain** | Entities, business rules, enums |
+| **Data / State** | Session-scoped storage, mock data for products and warehouses |
+
+---
+
 ## Data Model
 
 ```mermaid
@@ -179,8 +282,11 @@ erDiagram
     }
 
     OPENING_BALANCE_DETAIL {
+        int Id
         string ProductId
+        string ProductName
         string WarehouseId
+        string WarehouseName
         decimal Quantity
         decimal Price
         date ExpiryDate
@@ -196,6 +302,189 @@ erDiagram
         string Name
     }
 ```
+
+---
+
+## Repository Structure
+
+```text
+opening-balance-management/
+│
+├── README.md
+│
+├── docs/
+│   ├── design/
+│   │   ├── 01-component-and-layered-architecture.md
+│   │   ├── 02-component-ui-structure(1).md
+│   │   ├── 03-domain-er-model(4).md
+│   │   ├── 04-sequence-add-detail.md
+│   │   ├── 05-activity-main-user-flow.md
+│   │   ├── 06-sequence-save-opening-balance (1).md
+│   │   └── 07-state-session-flow.md
+│   └── screenshots/
+│       ├── 01-opening-balance-add-item.png
+│       ├── 02-opening-balance-edit-item.png
+│       ├── 03-opening-balance-delete-confirmation.png
+│       ├── 04-opening-balance-details-view.png
+│       └── 05-opening-balance-empty-state.png
+│
+├── src/
+│   ├── OpeningBalance.Application/
+│   │   ├── OpeningBalance.Application.csproj
+│   │   └── Inventory/
+│   │       ├── DTOs/
+│   │       │   └── OpeningBalanceDetailDto.cs
+│   │       ├── Interfaces/
+│   │       │   ├── IOpeningBalanceService.cs
+│   │       │   └── ISessionStorageService.cs
+│   │       ├── Mapping/
+│   │       │   └── OpeningBalanceMappingExtensions.cs
+│   │       ├── Services/
+│   │       │   └── OpeningBalanceService.cs
+│   │       └── Validators/
+│   │           └── OpeningBalanceDetailValidator.cs
+│   │
+│   └── OpeningBalance.Domain/
+│       ├── OpeningBalance.Domain.csproj
+│       └── Inventory/
+│           ├── Entities/
+│           │   ├── OpeningBalance.cs
+│           │   ├── OpeningBalanceDetail.cs
+│           │   ├── Product.cs
+│           │   └── Warehouse.cs
+│           └── Enums/
+│               └── ValidationError.cs
+│
+├── tests/
+│
+└── .gitignore
+```
+
+---
+
+## Source Code Overview
+
+### Domain Layer — `OpeningBalance.Domain`
+
+The domain layer contains the core entities and business enums with no external dependencies.
+
+#### Entities
+
+| Entity | Description | Key Properties |
+|---|---|---|
+| `OpeningBalance` | Document header representing one opening balance entry | `DocumentNumber`, `Date`, `User`, `Description`, `Details` |
+| `OpeningBalanceDetail` | Individual line item within an opening balance | `Id`, `ProductId`, `ProductName`, `WarehouseId`, `WarehouseName`, `Quantity`, `Price`, `ExpiryDate` |
+| `Product` | Product reference data (mock) | `Id`, `Name` |
+| `Warehouse` | Warehouse reference data (mock) | `Id`, `Name` |
+
+#### Enums
+
+| Enum | Values |
+|---|---|
+| `ValidationError` | `None`, `ProductRequired`, `WarehouseRequired`, `QuantityMustBeGreaterThanZero` |
+
+---
+
+### Application Layer — `OpeningBalance.Application`
+
+The application layer orchestrates use cases and bridges the domain with the presentation.
+
+#### Service Interface — `IOpeningBalanceService`
+
+| Method | Purpose |
+|---|---|
+| `GetProducts()` | Returns list of available products (mock data) |
+| `GetWarehouses()` | Returns list of available warehouses (mock data) |
+| `AddDetail()` | Adds a new detail line to the current document |
+| `UpdateDetail()` | Updates an existing detail line |
+| `RemoveDetail()` | Removes a detail line from the current document |
+| `GetAllDetails()` | Returns all detail lines for the current document |
+| `GetDetailById()` | Returns a specific detail line by ID |
+| `ValidateDetail()` | Validates a detail line against business rules |
+| `SaveOpeningBalance()` | Saves the complete document to session storage |
+| `GetCurrentOpeningBalance()` | Retrieves the current document from session storage |
+
+#### Mock Data
+
+**Products:**
+
+| Product |
+|---|
+| HP Laptop |
+| Keyboard |
+| شاشة مكتبية |
+| ماوس لاسلكي |
+| طابعة ليزر |
+
+**Warehouses:**
+
+| Warehouse |
+|---|
+| المخزن الرئيسي |
+| مخزن الفرع الأول |
+| مخزن الفرع الثاني |
+| مخزن المواد الخام |
+| مخزن المنتجات الجاهزة |
+
+#### Document Number Generation
+
+Document numbers are auto-generated using the format `MM-XXXX`, where `MM` is the current month and `XXXX` is an auto-incremented sequence number.
+
+#### Validation
+
+The `OpeningBalanceDetailValidator` validates each detail line and returns a list of `ValidationError` values:
+
+- `ProductRequired` — when no product is selected
+- `WarehouseRequired` — when no warehouse is selected
+- `QuantityMustBeGreaterThanZero` — when quantity is zero or negative
+
+#### Session Storage
+
+The `ISessionStorageService` interface provides session-scoped key/value storage with `GetAsync<T>()` and `SetAsync<T>()` methods.
+
+---
+
+## UI Components
+
+The Blazor UI follows an RTL Arabic layout with the following component hierarchy:
+
+```text
+OpeningBalancePage
+├── بيانات الوثيقة (Document Header Card)
+│   ├── رقم الوثيقة (Document Number) — auto-generated
+│   ├── المستخدم (User) — display only
+│   ├── تاريخ الإدخال (Entry Date) — date picker
+│   └── البيان (Description) — text input
+│
+├── إضافة صنف (Add Item Card)
+│   ├── الصنف (Product) — dropdown
+│   ├── المخزن (Warehouse) — dropdown
+│   ├── الكمية (Quantity) — numeric input
+│   ├── السعر (Price) — numeric input
+│   ├── تاريخ الصلاحية (Expiry Date) — date picker
+│   └── + إضافة صنف (Add Item Button)
+│
+├── تفاصيل الأرصدة (Balance Details Table)
+│   ├── # (Row Number)
+│   ├── الصنف (Product Name)
+│   ├── المخزن (Warehouse Name)
+│   ├── الكمية (Quantity)
+│   ├── السعر (Price)
+│   ├── تاريخ الصلاحية (Expiry Date)
+│   └── الإجراءات (Actions: Edit / Delete)
+│
+└── حفظ الوثيقة — Save (Save Document Button)
+```
+
+### UI States
+
+| State | Description | Screenshot |
+|---|---|---|
+| **Adding Item** | Main screen with document data and one item in the table | `01-opening-balance-add-item.png` |
+| **Editing Item** | Inline edit mode with editable fields and save/cancel | `02-opening-balance-edit-item.png` |
+| **Delete Confirmation** | Modal dialog showing item details before deletion | `03-opening-balance-delete-confirmation.png` |
+| **Multiple Items** | Table view with three items and all actions available | `04-opening-balance-details-view.png` |
+| **Empty State** | New document with no details and a guidance message | `05-opening-balance-empty-state.png` |
 
 ---
 
@@ -310,30 +599,7 @@ Final Pull Request
 
 ### Current Status
 
-> **In Progress — Project Setup / Analysis**
-
----
-
-## Repository Structure
-
-```text
-opening-balance-management/
-│
-├── README.md
-│
-├── docs/
-│   ├── analysis/
-│   ├── design/
-│   └── testing/
-│
-├── src/
-│
-├── tests/
-│
-└── .github/
-    ├── workflows/
-    └── pull_request_template.md
-```
+> **In Progress — Implementation**
 
 ---
 
@@ -363,13 +629,29 @@ Contains:
 
 Contains:
 
-- Architecture
-- UI Design
-- Component Design
-- Model Design
-- Service Responsibilities
-- Validation Approach
-- Design Decisions
+| Document | Topic |
+|---|---|
+| `01-component-and-layered-architecture.md` | System component and layered architecture diagram |
+| `02-component-ui-structure(1).md` | UI component decomposition and data flows |
+| `03-domain-er-model(4).md` | Domain entities, fields, relationships, and invariants |
+| `04-sequence-add-detail.md` | Sequence diagram for adding items |
+| `05-activity-main-user-flow.md` | Complete activity diagram for the end-to-end user journey |
+| `06-sequence-save-opening-balance (1).md` | Sequence diagram for saving documents with error handling |
+| `07-state-session-flow.md` | State diagram for the session draft lifecycle |
+
+### Screenshots
+
+`docs/screenshots/`
+
+Contains visual reference screenshots for all major UI states:
+
+| Screenshot | Description |
+|---|---|
+| `01-opening-balance-add-item.png` | Adding an item to the opening balance |
+| `02-opening-balance-edit-item.png` | Inline editing of a detail row |
+| `03-opening-balance-delete-confirmation.png` | Delete confirmation dialog |
+| `04-opening-balance-details-view.png` | Complete details view with multiple items |
+| `05-opening-balance-empty-state.png` | Empty state for a new document |
 
 ### Testing
 
@@ -400,7 +682,19 @@ Implementation
 Test
 ```
 
-This allows each important requirement to be tracked through the development lifecycle.
+### Requirements to Design Mapping
+
+| Requirement | Use Case | Design Component |
+|---|---|---|
+| FR-01 | UC-001 | `OpeningBalancePage` |
+| FR-02 | UC-002 | `HeaderForm` |
+| FR-03 | UC-003 | `AddDetailRow` + `OpeningBalanceService` |
+| FR-04 | UC-004 | `ProductDropdown` |
+| FR-05 | UC-005 | `WarehouseDropdown` |
+| FR-06 | UC-006 | `DetailsGrid` |
+| FR-07 | UC-007 | `EditDetailRow` |
+| FR-08 | UC-008 | `ConfirmDialog` + `DeleteDetail` |
+| FR-09 | UC-009 | `SaveDocument` + `Session` |
 
 ---
 
@@ -409,6 +703,7 @@ This allows each important requirement to be tracked through the development lif
 - ASP.NET Core
 - Blazor
 - C#
+- .NET 9.0
 - Mock Data / In-Memory Data
 
 The implementation will use only the technology and infrastructure required for the assessment scope.
