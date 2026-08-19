@@ -1,0 +1,175 @@
+@page "/"
+@using OpeningBalance.Application.Inventory.OpeningBalances.Interfaces
+@using OpeningBalance.Domain.Inventory.OpeningBalances.Entities
+@inject IOpeningBalanceService OpeningBalanceService
+@rendermode InteractiveServer
+
+<PageTitle>الأرصدة الافتتاحية</PageTitle>
+
+<div class="layout-wrapper">
+    <aside class="sidebar @(IsSidebarOpen ? "sidebar-open" : "")">
+        <div class="sidebar-header">
+            <button class="menu-toggle" @onclick="ToggleSidebar"><i class="ph ph-list"></i></button>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#"><i class="ph ph-house"></i><span>الرئيسية</span></a>
+            <a href="#"><i class="ph ph-package"></i><span>الأصناف</span></a>
+            <a href="#"><i class="ph ph-buildings"></i><span>المخازن</span></a>
+            <a href="#"><i class="ph ph-shopping-cart"></i><span>المشتريات</span></a>
+            <a href="#"><i class="ph ph-currency-circle-dollar"></i><span>المبيعات</span></a>
+            <a href="#" class="active"><i class="ph ph-archive-box"></i><span>المخزون</span></a>
+            <a href="#"><i class="ph ph-chart-line-up"></i><span>التقارير</span></a>
+            <a href="#"><i class="ph ph-gear"></i><span>الإعدادات</span></a>
+        </nav>
+    </aside>
+
+    @if (IsSidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="ToggleSidebar"></div>
+    }
+
+    <div class="main-content">
+        <header class="top-header">
+            <div class="header-right">
+                <button class="mobile-menu-toggle" @onclick="ToggleSidebar"><i class="ph ph-list"></i></button>
+                <div class="title-icon"><i class="ph ph-cube"></i></div>
+                <div class="title-text">
+                    <h1>الأرصدة الافتتاحية للمخزون</h1>
+                    <div class="breadcrumb">الرئيسية / المخزون / الأرصدة الافتتاحية للمخزون</div>
+                </div>
+            </div>
+            <div class="header-left">
+                <button class="icon-btn"><i class="ph ph-bell"></i></button>
+                <button class="icon-btn"><i class="ph ph-corners-out"></i></button>
+                <div class="user-profile">
+                    <div class="user-info">
+                        <strong>بشار جلال</strong>
+                        <span>مدير النظام</span>
+                    </div>
+                    <div class="avatar-default"><i class="ph ph-user"></i></div>
+                </div>
+            </div>
+        </header>
+        <main class="page-container">
+        @if (IsLoading)
+        {
+            <div class="loading-card">جاري تحميل بيانات الأصناف والمخازن...</div>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(GlobalMessage))
+            {
+                <div class="global-message @(MessageIsError ? "error" : "success")"><span class="message-icon">@(MessageIsError ? "✕" : "✓")</span><span>@GlobalMessage</span></div>
+            }
+            <section class="card header-card">
+                <div class="card-heading"><h2><i class="ph ph-file-text"></i> بيانات الوثيقة</h2></div>
+                <div class="header-grid">
+                    <label class="field required"><span>رقم الوثيقة</span><input class="@(HasError("DocumentNumber") ? "invalid" : "")" @bind="Header.DocumentNumber" placeholder="OB-0001" />@InlineError("DocumentNumber")</label>
+                    <label class="field required"><span>المستخدم</span><input class="@(HasError("UserName") ? "invalid" : "")" @bind="Header.UserName" placeholder="بشار جلال" />@InlineError("UserName")</label>
+                    <label class="field required"><span>تاريخ الإدخال</span><input type="date" class="@(HasError("DocumentDate") ? "invalid" : "")" @bind="Header.DocumentDate" />@InlineError("DocumentDate")</label>
+                    <label class="field" style="grid-column: 1 / -1;"><span>البيان</span><input @bind="Header.Description" placeholder="أرصدة افتتاحية للمخزن الرئيسي" /></label>
+                </div>
+            </section>
+            <section class="card add-card">
+                <div class="card-heading"><h2><i class="ph ph-plus-circle"></i> إضافة صنف</h2></div>
+                <div class="add-grid">
+                    <label class="field required"><span>الصنف *</span><select value="@Draft.ProductId" @onchange="OnProductChanged"><option value="0">اختر الصنف</option>@foreach (var product in Products) { <option value="@product.Id">@product.Name</option> }</select></label>
+                    <label class="field required"><span>المخزن *</span><select value="@Draft.WarehouseId" @onchange="OnWarehouseChanged"><option value="0">اختر المخزن</option>@foreach (var warehouse in Warehouses) { <option value="@warehouse.Id">@warehouse.Name</option> }</select></label>
+                    <label class="field required"><span>الكمية *</span><input type="number" min="0" step="any" class="@(HasError("Quantity") ? "invalid" : "")" @bind="Draft.Quantity" placeholder="0" />@InlineError("Quantity")</label>
+                    <label class="field"><span>السعر</span><input type="number" class="no-spinners" min="0" step="0.01" @bind="Draft.Price" placeholder="0.00" /></label>
+                    <label class="field"><span>تاريخ الصلاحية</span><input type="date" @bind="Draft.ExpiryDate" /></label>
+                    <button class="primary add-button" @onclick="AddDetail" disabled="@IsSaving">+ إضافة صنف</button>
+                </div>
+            </section>
+            <section class="card details-card">
+                <div class="card-heading"><h2><i class="ph ph-list-dashes"></i> تفاصيل الأرصدة</h2></div>
+                <div class="table-wrap"><table><thead><tr><th>#</th><th>الصنف</th><th>المخزن</th><th>الكمية</th><th>السعر</th><th>تاريخ الصلاحية</th><th>الإجراءات</th></tr></thead><tbody>
+                @if (Header.Details.Count == 0)
+                {
+                    <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><strong>لا توجد تفاصيل</strong><span>أضف صنفًا واحدًا على الأقل قبل الحفظ</span></div></td></tr>
+                }
+                else
+                {
+                    @foreach (var (detail, index) in Header.Details.Select((item, index) => (item, index)))
+                    {
+                        @if (EditingId == detail.Id)
+                        {
+                            <tr class="editing-row"><td>@(index + 1)</td><td><select value="@EditDraft.ProductId" @onchange="OnEditProductChanged"><option value="0">اختر</option>@foreach (var p in Products) { <option value="@p.Id">@p.Name</option> }</select></td><td><select value="@EditDraft.WarehouseId" @onchange="OnEditWarehouseChanged"><option value="0">اختر</option>@foreach (var w in Warehouses) { <option value="@w.Id">@w.Name</option> }</select></td><td><input type="number" min="0" step="any" @bind="EditDraft.Quantity" /></td><td><input type="number" min="0" step="any" @bind="EditDraft.Price" /></td><td><input type="date" @bind="EditDraft.ExpiryDate" /></td><td class="actions"><button class="link-action" @onclick="SaveEdit">حفظ التعديل</button><button class="link-action muted" @onclick="CancelEdit">إلغاء</button></td></tr>
+                        }
+                        else
+                        {
+                            <tr @key="detail.Id"><td class="number">@(index + 1)</td><td>@detail.ProductName</td><td>@detail.WarehouseName</td><td class="number">@detail.Quantity</td><td class="number">@(detail.Price?.ToString("0.##") ?? "—")</td><td class="number">@(detail.ExpiryDate?.ToString("d/M/yyyy") ?? "—")</td><td class="actions"><button class="link-action" @onclick="() => BeginEdit(detail)">تعديل</button><button class="link-action danger" @onclick="() => AskDelete(detail)">حذف</button></td></tr>
+                        }
+                    }
+                }
+                </tbody></table></div>
+            </section>
+        }
+    </main>
+    <footer class="save-bar"><span>البيانات محفوظة داخل الجلسة فقط </span><button class="primary save-button" @onclick="SaveDocument" disabled="@(IsSaving || IsLoading)">@(IsSaving ? "جاري الحفظ..." : "حفظ الوثيقة — Save")</button></footer>
+    @if (DeleteTarget is not null)
+    {
+        <div class="modal-backdrop"><div class="confirm-dialog"><div class="dialog-title"><span class="danger-dot"></span>تأكيد الحذف </div><p>هل تريد حذف هذا السطر؟</p><div class="dialog-detail">@DeleteTarget.ProductName — @DeleteTarget.WarehouseName — @DeleteTarget.Quantity</div><div class="dialog-actions"><button class="danger-button" @onclick="ConfirmDelete">حذف </button><button class="secondary" @onclick="CancelDelete">إلغاء — Cancel</button></div></div></div>
+    }
+    </div>
+</div>
+
+@code {
+    private bool IsSidebarOpen { get; set; }
+    private void ToggleSidebar() => IsSidebarOpen = !IsSidebarOpen;
+
+    private OpeningBalanceDocument Header { get; set; } = new() { UserName = "مدير المخزون" };
+    private OpeningBalanceDetail Draft { get; set; } = new();
+    private OpeningBalanceDetail EditDraft { get; set; } = new();
+    private IReadOnlyList<Product> Products { get; set; } = [];
+    private IReadOnlyList<Warehouse> Warehouses { get; set; } = [];
+    private Dictionary<string, string> Errors { get; } = new();
+    private Guid? EditingId { get; set; }
+    private OpeningBalanceDetail? DeleteTarget { get; set; }
+    private string? GlobalMessage { get; set; }
+    private bool MessageIsError { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private bool IsSaving { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Products = await OpeningBalanceService.GetProductsAsync();
+        Warehouses = await OpeningBalanceService.GetWarehousesAsync();
+        IsLoading = false;
+    }
+
+    private void OnProductChanged(ChangeEventArgs args) { Draft.ProductId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0; Draft.ProductName = Products.FirstOrDefault(x => x.Id == Draft.ProductId)?.Name ?? string.Empty; }
+    private void OnWarehouseChanged(ChangeEventArgs args) { Draft.WarehouseId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0; Draft.WarehouseName = Warehouses.FirstOrDefault(x => x.Id == Draft.WarehouseId)?.Name ?? string.Empty; }
+    private void OnEditProductChanged(ChangeEventArgs args) { EditDraft.ProductId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0; EditDraft.ProductName = Products.FirstOrDefault(x => x.Id == EditDraft.ProductId)?.Name ?? string.Empty; }
+    private void OnEditWarehouseChanged(ChangeEventArgs args) { EditDraft.WarehouseId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0; EditDraft.WarehouseName = Warehouses.FirstOrDefault(x => x.Id == EditDraft.WarehouseId)?.Name ?? string.Empty; }
+    private void AddDetail()
+    {
+        ClearMessage(); Errors.Clear(); var errors = ValidateDetail(Draft); foreach (var error in errors) Errors[error.Field] = error.Message;
+        if (errors.Count > 0) { ShowError("يجب اختيار الصنف والمخزن والكمية"); return; }
+        Header.Details.Add(Clone(Draft)); Draft = new(); ShowSuccess("تمت إضافة الصنف إلى الرصيد الافتتاحي");
+    }
+    private void BeginEdit(OpeningBalanceDetail detail) { EditingId = detail.Id; EditDraft = Clone(detail); ClearMessage(); }
+    private void CancelEdit() { EditingId = null; EditDraft = new(); ClearMessage(); }
+    private void SaveEdit()
+    {
+        var errors = ValidateDetail(EditDraft); if (errors.Count > 0) { ShowError("يرجى تصحيح البيانات"); return; }
+        var current = Header.Details.FirstOrDefault(x => x.Id == EditingId);
+        if (current is not null) { current.ProductId = EditDraft.ProductId; current.ProductName = EditDraft.ProductName; current.WarehouseId = EditDraft.WarehouseId; current.WarehouseName = EditDraft.WarehouseName; current.Quantity = EditDraft.Quantity; current.Price = EditDraft.Price; current.ExpiryDate = EditDraft.ExpiryDate; }
+        CancelEdit(); ShowSuccess("تم تعديل السطر بنجاح");
+    }
+    private void AskDelete(OpeningBalanceDetail detail) => DeleteTarget = detail;
+    private void CancelDelete() => DeleteTarget = null;
+    private void ConfirmDelete() { if (DeleteTarget is not null) Header.Details.Remove(DeleteTarget); DeleteTarget = null; ShowSuccess("تم حذف السطر بنجاح"); }
+    private async Task SaveDocument()
+    {
+        Errors.Clear(); ClearMessage(); IsSaving = true; var result = await OpeningBalanceService.SaveAsync(Header); IsSaving = false;
+        if (result.Succeeded) ShowSuccess(result.Message!); else ShowError(result.Message ?? "تعذر حفظ الأرصدة الافتتاحية");
+    }
+    private List<ValidationError> ValidateDetail(OpeningBalanceDetail detail) { var errors = new List<ValidationError>(); if (detail.ProductId <= 0) errors.Add(new("ProductId", "يرجى اختيار الصنف")); if (detail.WarehouseId <= 0) errors.Add(new("WarehouseId", "يرجى اختيار المخزن")); if (detail.Quantity <= 0) errors.Add(new("Quantity", "يجب أن تكون الكمية أكبر من صفر")); return errors; }
+    private bool HasError(string field) => Errors.ContainsKey(field);
+    private RenderFragment InlineError(string field) => builder => { if (Errors.TryGetValue(field, out var message)) builder.AddContent(0, (MarkupString)$"<small class='inline-error'>{message}</small>"); };
+    private void ShowSuccess(string message) { GlobalMessage = message; MessageIsError = false; }
+    private void ShowError(string message) { GlobalMessage = message; MessageIsError = true; }
+    private void ClearMessage() { GlobalMessage = null; MessageIsError = false; }
+    private static OpeningBalanceDetail Clone(OpeningBalanceDetail d) => new() { ProductId = d.ProductId, ProductName = d.ProductName, WarehouseId = d.WarehouseId, WarehouseName = d.WarehouseName, Quantity = d.Quantity, Price = d.Price, ExpiryDate = d.ExpiryDate };
+}
